@@ -43,6 +43,11 @@ school_slope = [-50; -30; 80];
 %school_slope = [0; 0; 0];
 sat = sat + school * school_intercept + school.*gpa * school_slope;
 
+% Adjust the "true" slope and intercept to reflect the average cluster
+% contributions.
+intercept = intercept + mean(school_intercept);
+slope = slope + mean(school_slope);
+
 % The GPA of students at Burroughs is inflated.
 % This makes the fixed effects only estimate biased.
 gpa(school(:,3) == 1) = gpa(school(:,3) == 1) + 0.5;
@@ -58,7 +63,7 @@ sat(sat > 1600) = 1600;
 %% Fixed Effects Model (GPA only)
 
 model_fixed = struct;
-
+scatter(gpa(1:400), model_reml.Y(1:400));
 % The observations are SAT score.
 Y = sat;
 model_fixed.Y = Y;
