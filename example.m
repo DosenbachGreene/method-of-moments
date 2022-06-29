@@ -15,7 +15,7 @@
 %% Generate the Data
 
 % Number of students.
-% Must be evenly divisible by 3 and 4.
+% Must be evenly divisible by 3 schools.
 n = 100 * 12;
 
 % Generate GPAs.
@@ -63,7 +63,7 @@ sat(sat > 1600) = 1600;
 %% Fixed Effects Model (GPA only)
 
 model_fixed = struct;
-scatter(gpa(1:400), model_reml.Y(1:400));
+
 % The observations are SAT score.
 Y = sat;
 model_fixed.Y = Y;
