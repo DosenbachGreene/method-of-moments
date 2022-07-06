@@ -14,9 +14,11 @@
 
 %% Generate the Data
 
-% Number of students.
-% Must be evenly divisible by 3 schools.
-n = 100 * 12;
+% Number of students in each school.
+n_jennings = 1000;
+n_gateway = 800;
+n_burroughs = 500;
+n = n_jennings + n_gateway + n_burroughs;
 
 % Generate GPAs.
 gpa = normrnd(2.5,0.5,n,1);
@@ -25,9 +27,15 @@ gpa(gpa > 4) = 4;
 
 % Split students into 3 high schools.
 school = zeros(n,3);
-school(1:(n/3), 1) = 1; % Jennings
-school((n/3+1):(2*n/3), 2) = 1; % Gateway
-school((2*n/3+1):n, 3) = 1; % Burroughs
+school(1:n_jennings, 1) = 1; % Jennings
+school((n_jennings+1):(n_jennings+n_gateway), 2) = 1; % Gateway
+school((n_jennings+n_gateway+1):n, 3) = 1; % Burroughs
+
+% Also create a categorical variable to indicate school membership.
+% 1 = Jennings
+% 2 = Gateway
+% 3 = Burroughs
+G = sum(school .* [1,2,3], 2);
 
 % Simulate some overall relationship between SAT score and GPA.
 intercept = 300;
@@ -90,34 +98,14 @@ xrange = [0.9, 4.1]; xlim(xrange); ylim([350,1650]);
 line(xrange, model_fixed.B(1) + xrange.*model_fixed.B(2), 'Color', scatter_h.CData, 'LineStyle', '--');
 title({['Fixed Effects B = [' num2str(model_fixed.B(1), '%0.0f') '; ' num2str(model_fixed.B(2), '%0.0f') ']']; ['SE = [' num2str(model_fixed.SE(1), '%0.0f') '; ' num2str(model_fixed.SE(2), '%0.0f') '], T = [' num2str(model_fixed.T(1), '%0.2f') ', ' num2str(model_fixed.T(2), '%0.2f') ']']}, 'interpreter', 'none');
 
-%% Compute Standard Error for Fixed Effects Model Using Sandwich Estimator
-
-% Find the empirical covariance matrix using the residuals.
-resid = model_fixed.Y - model_fixed.X*model_fixed.B;
-Vfull = resid*resid';
-clear resid
-
-% Find the standard error for a diagonal covariance matrix (heteroskedastic
-% but independent errors).
-dVfull = diag(Vfull);
-SE_diag = Xpinv*diag(dVfull)*Xpinv'; SE_diag = sqrt(diag(SE_diag));
-
-% Find SE for a diagonal covariance matrix where the variance is pooled for
-% each school.
-V = diag([repmat(mean(dVfull(1:n/3)), 1, n/3), repmat(mean(dVfull((n/3+1):2*n/3)), 1, n/3), repmat(mean(dVfull((2*n/3+1):n)), 1, n/3)]);
-clear dVfull
-SE_pooled_diag = Xpinv*V*Xpinv'; SE_pooled_diag = sqrt(diag(SE_pooled_diag));
-
-% Find SE for a block diagonal covariance matrix where errors within each
-% school can be correlated.
-V = school*school' .* Vfull;
-clear Vfull
-SE_block = Xpinv*V*Xpinv'; SE_block = sqrt(diag(SE_block));
-clear Xpinv resid V
+% Compute Standard Error for Fixed Effects Model Using Sandwich Estimator
+resid = model_fixed.Y - model_fixed.X * model_fixed.B;
+model_fixed.swe_covB = swe(Xpinv, resid, G);
+clear resid Xpinv
 
 % Start a table to track and compare estimates of B and its standard error
 % using different method.
-comparison_tbl = table(repmat(model_fixed.B', 4, 1), [model_fixed.SE'; SE_diag'; SE_pooled_diag'; SE_block'], 'VariableNames', {'B', 'SE'}, 'RowNames', {'Fixed Only', 'SwE Diagonal', 'SwE Pooled Diagonal', 'SwE Block Diagonal'});
+comparison_tbl = table(repmat(model_fixed.B', 2, 1), [model_fixed.SE'; sqrt(diag(model_fixed.swe_covB.block))'], 'VariableNames', {'B', 'SE'}, 'RowNames', {'Fixed Only', 'Fixed + Block SwE'});
 
 %% Mixed Effects Model, Random Intercept for School
 
@@ -277,4 +265,48 @@ legend([scatter_h3, scatter_h2, scatter_h1, line_marginal, line_fixed], 'Burroug
 title({['Random Intercept + Slope (REML) B = [' num2str(model_reml.B(1), '%0.0f') '; ' num2str(model_reml.B(2), '%0.0f') ']'], ['SE = [' num2str(model_reml.SE(1), '%0.0f') '; ' num2str(model_reml.SE(2), '%0.0f') '], T = [' num2str(model_reml.T(1), '%0.2f') ', ' num2str(model_reml.T(2), '%0.2f') ']']});
 
 % Add to the comparison table.
-comparison_tbl = [comparison_tbl; table(model_reml.B', model_reml.SE', 'VariableNames', {'B', 'SE'}, 'RowNames', {'REML Intercept + Slope'})]
+comparison_tbl = [comparison_tbl; table(model_reml.B', model_reml.SE', 'VariableNames', {'B', 'SE'}, 'RowNames', {'REML Intercept + Slope'})];
+
+%% Fixed Effects with Clusters
+
+X = [ones(n,1), gpa, school(:,1).*1.5-0.5, school(:,2).*1.5-0.5, gpa.*(school(:,1).*1.5-0.5), gpa.*(school(:,2).*1.5-0.5)];
+Y = sat;
+B = pinv(X)*Y;
+u = zeros(6,1);
+u(1) = B(3)-0.5*B(4);
+u(2) = B(4)-0.5*B(3);
+u(3) = -0.5*B(3)-0.5*B(4);
+u(4) = B(5)-0.5*B(6);
+u(5) = B(6)-0.5*B(5);
+u(6) = -0.5*B(5)-0.5*B(6);
+% Find the standard errors.
+SE = sqrt(diag(pinv(X)*pinv(X)'*sum((Y-X*B).^2)/size(Y,1)));
+model_marginal_both = struct('X', X, 'Y', sat, 'B', B, 'u', u, 'SE', SE);
+clear X Y B u SE T
+
+% Compute Standard Error for Fixed Effects Model Using Sandwich Estimator
+Xpinv = pinv(model_marginal_both.X(:, 1:2));
+resid = model_marginal_both.Y - model_marginal_both.X(:, 1:2) * model_marginal_both.B(1:2);
+model_marginal_both.swe_covB = swe(Xpinv, resid, G);
+clear resid Xpinv
+model_marginal_both.SE_swe = sqrt(diag(model_marginal_both.swe_covB.block));
+model_marginal_both.T = model_marginal_both.B(1:2) ./ model_marginal_both.SE_swe(1:2);
+
+% Start a table to track and compare estimates of B and its standard error
+% using different method.
+comparison_tbl = [comparison_tbl; table(repmat(model_marginal_both.B(1:2)', 2, 1), [model_marginal_both.SE(1:2)'; sqrt(diag(model_marginal_both.swe_covB.block))'], 'VariableNames', {'B', 'SE'}, 'RowNames', {'Marginal Only', 'Marginal + Block SwE'})]
+
+% Scatterplot
+figure; hold on;
+scatter_h1 = scatter(gpa(logical(school(:,1))), sat(logical(school(:,1))));
+scatter_h2 = scatter(gpa(logical(school(:,2))), sat(logical(school(:,2))));
+scatter_h3 = scatter(gpa(logical(school(:,3))), sat(logical(school(:,3))));
+xlabel('Grade Point Average'); ylabel('SAT Score');
+xrange = [0.9, 4.1]; xlim(xrange); ylim([350,1650]);
+line_fixed = line(xrange, model_fixed.B(1) + xrange.*model_fixed.B(2), 'Color', 'black', 'LineStyle', '--');
+line_marginal = line(xrange, model_marginal_both.B(1) + xrange.*model_marginal_both.B(2), 'Color', 'black');
+line(xrange, model_marginal_both.B(1) + model_marginal_both.u(1) + xrange.*(model_marginal_both.B(2) + model_marginal_both.u(4)), 'Color', scatter_h1.CData);
+line(xrange, model_marginal_both.B(1) + model_marginal_both.u(2) + xrange.*(model_marginal_both.B(2) + model_marginal_both.u(5)), 'Color', scatter_h2.CData);
+line(xrange, model_marginal_both.B(1) + model_marginal_both.u(3) + xrange.*(model_marginal_both.B(2) + model_marginal_both.u(6)), 'Color', scatter_h3.CData);
+legend([scatter_h3, scatter_h2, scatter_h1, line_marginal, line_fixed], 'Burroughs', 'Gateway', 'Jennings', 'Marginal', 'Fixed Only', 'Location', 'Northwest');
+title({['Marginal Intercept + Slope = [' num2str(model_marginal_both.B(1), '%0.0f') '; ' num2str(model_marginal_both.B(2), '%0.0f') ']'], ['SE (SwE) = [' num2str(model_marginal_both.SE_swe(1), '%0.0f') '; ' num2str(model_marginal_both.SE_swe(2), '%0.0f') '], T = [' num2str(model_marginal_both.T(1), '%0.2f') ', ' num2str(model_marginal_both.T(2), '%0.2f') ']']});
