@@ -292,8 +292,7 @@ clear resid Xpinv
 model_marginal_both.SE_swe = sqrt(diag(model_marginal_both.swe_covB.block));
 model_marginal_both.T = model_marginal_both.B(1:2) ./ model_marginal_both.SE_swe(1:2);
 
-% Start a table to track and compare estimates of B and its standard error
-% using different method.
+% Add to comparison table.
 comparison_tbl = [comparison_tbl; table(repmat(model_marginal_both.B(1:2)', 2, 1), [model_marginal_both.SE(1:2)'; sqrt(diag(model_marginal_both.swe_covB.block))'], 'VariableNames', {'B', 'SE'}, 'RowNames', {'Marginal Only', 'Marginal + Block SwE'})]
 
 % Scatterplot
@@ -310,3 +309,69 @@ line(xrange, model_marginal_both.B(1) + model_marginal_both.u(2) + xrange.*(mode
 line(xrange, model_marginal_both.B(1) + model_marginal_both.u(3) + xrange.*(model_marginal_both.B(2) + model_marginal_both.u(6)), 'Color', scatter_h3.CData);
 legend([scatter_h3, scatter_h2, scatter_h1, line_marginal, line_fixed], 'Burroughs', 'Gateway', 'Jennings', 'Marginal', 'Fixed Only', 'Location', 'Northwest');
 title({['Marginal Intercept + Slope = [' num2str(model_marginal_both.B(1), '%0.0f') '; ' num2str(model_marginal_both.B(2), '%0.0f') ']'], ['SE (SwE) = [' num2str(model_marginal_both.SE_swe(1), '%0.0f') '; ' num2str(model_marginal_both.SE_swe(2), '%0.0f') '], T = [' num2str(model_marginal_both.T(1), '%0.2f') ', ' num2str(model_marginal_both.T(2), '%0.2f') ']']});
+
+%% Visualize comparison table.
+
+% Fixed effects without clusters.
+B = comparison_tbl('Fixed Only', :).B(1); % estimate of interecept
+SE = comparison_tbl('Fixed Only', :).SE(1); % standard error
+SE_swe = comparison_tbl('Fixed + Block SwE', :).SE(1); % SwE standard error
+boxdata_int = [B-SE_swe, B-SE, B, B+SE, B+SE_swe]; % make a boxplot
+B = comparison_tbl('Fixed Only', :).B(2); % estimate of slope
+SE = comparison_tbl('Fixed Only', :).SE(2); % standard error
+SE_swe = comparison_tbl('Fixed + Block SwE', :).SE(2); % SwE standard error
+boxdata_slope = [B-SE_swe, B-SE, B, B+SE, B+SE_swe]; % make a boxplot
+clear B SE SE_swe
+
+% REML
+B = comparison_tbl('REML Intercept + Slope', :).B(1); % estimate of interecept
+SE = comparison_tbl('REML Intercept + Slope', :).SE(1); % standard error
+boxdata_int = [boxdata_int; [B-SE, B-SE, B, B+SE, B+SE]]; % make a boxplot
+B = comparison_tbl('REML Intercept + Slope', :).B(2); % estimate of slope
+SE = comparison_tbl('REML Intercept + Slope', :).SE(2); % standard error
+boxdata_slope = [boxdata_slope; [B-SE, B-SE, B, B+SE, B+SE]]; % make a boxplot
+clear B SE
+
+% MoM
+B = comparison_tbl('MoM Intercept + Slope', :).B(1); % estimate of interecept
+SE = comparison_tbl('MoM Intercept + Slope', :).SE(1); % standard error
+boxdata_int = [boxdata_int; [B-SE, B-SE, B, B+SE, B+SE]]; % make a boxplot
+B = comparison_tbl('MoM Intercept + Slope', :).B(2); % estimate of slope
+SE = comparison_tbl('MoM Intercept + Slope', :).SE(2); % standard error
+boxdata_slope = [boxdata_slope; [B-SE, B-SE, B, B+SE, B+SE]]; % make a boxplot
+clear B SE
+
+% Marginal (fixed effects with clusters).
+B = comparison_tbl('Marginal Only', :).B(1); % estimate of interecept
+SE = comparison_tbl('Marginal Only', :).SE(1); % standard error
+SE_swe = comparison_tbl('Marginal + Block SwE', :).SE(1); % SwE standard error
+boxdata_int = [boxdata_int; [B-SE_swe, B-SE, B, B+SE, B+SE_swe]]; % make a boxplot
+B = comparison_tbl('Marginal Only', :).B(2); % estimate of slope
+SE = comparison_tbl('Marginal Only', :).SE(2); % standard error
+SE_swe = comparison_tbl('Marginal + Block SwE', :).SE(2); % SwE standard error
+boxdata_slope = [boxdata_slope; [B-SE_swe, B-SE, B, B+SE, B+SE_swe]]; % make a boxplot
+clear B SE SE_swe
+
+% Prepare boxplot data for plotting.
+boxdata_int = boxdata_int(:, [1 2 2 3 4 4 5])';
+boxdata_slope = boxdata_slope(:, [1 2 2 3 4 4 5])';
+
+% Make the plot.
+f = figure; f.Position(3) = f.Position(3) * 2;
+subplot(1,2,1);
+boxplot(boxdata_int, 'Whisker', Inf);
+xlabels = {'Fixed Only', 'REML', 'MoM', 'Marginal'};
+xticklabels(xlabels);
+ylabel('SAT Score');
+title('Interecept');
+clear boxdata_int
+subplot(1,2,2);
+h_box = boxplot(boxdata_slope, 'Whisker', Inf);
+h_box = handle(h_box);
+xticklabels(xlabels);
+ylabel('Change in SAT Score per GPA Point');
+title('Slope');
+h_swe = h_box(2);
+h_se = h_box(5);
+legend([h_se, h_swe], 'Standard Error', 'SwE Error', 'Location', 'Northeast');
+clear h_box h_se h_swe  boxdata_slope xlabels f
