@@ -68,7 +68,10 @@ sat = sat + normrnd(0, 50, n, 1);
 sat(sat < 400) = 400;
 sat(sat > 1600) = 1600;
 
-%% Fixed Effects Model (GPA only)
+% Store data in a closure for easy plotting of results.
+plot_clusters = make_plot_fn(sat, gpa, school);
+
+%% Fixed Effects Model Without Clusters
 
 model_fixed = struct;
 
@@ -91,12 +94,8 @@ model_fixed.SE = sqrt(diag(pinv(X)*pinv(X)'*sum((Y-X*model_fixed.B).^2)/size(Y,1
 model_fixed.T = model_fixed.B ./ model_fixed.SE;
 
 % Scatterplot
-figure; hold on;
-scatter_h = scatter(gpa, sat, 'k');
-xlabel('Grade Point Average'); ylabel('SAT Score');
-xrange = [0.9, 4.1]; xlim(xrange); ylim([350,1650]);
-line(xrange, model_fixed.B(1) + xrange.*model_fixed.B(2), 'Color', scatter_h.CData, 'LineStyle', '--');
-title({['Fixed Effects B = [' num2str(model_fixed.B(1), '%0.0f') '; ' num2str(model_fixed.B(2), '%0.0f') ']']; ['SE = [' num2str(model_fixed.SE(1), '%0.0f') '; ' num2str(model_fixed.SE(2), '%0.0f') '], T = [' num2str(model_fixed.T(1), '%0.2f') ', ' num2str(model_fixed.T(2), '%0.2f') ']']}, 'interpreter', 'none');
+plot_clusters(model_fixed.B);
+title('Fixed Effects Only (No Clusters)');
 
 % Compute Standard Error for Fixed Effects Model Using Sandwich Estimator
 resid = model_fixed.Y - model_fixed.X * model_fixed.B;
@@ -126,19 +125,8 @@ model_int.SE = sqrt(diag(model_int.B_cov));
 model_int.T = model_int.B ./ model_int.SE;
 
 % Scatterplot
-figure; hold on;
-scatter_h1 = scatter(gpa(logical(school(:,1))), sat(logical(school(:,1))));
-scatter_h2 = scatter(gpa(logical(school(:,2))), sat(logical(school(:,2))));
-scatter_h3 = scatter(gpa(logical(school(:,3))), sat(logical(school(:,3))));
-xlabel('Grade Point Average'); ylabel('SAT Score');
-xrange = [0.9, 4.1]; xlim(xrange); ylim([350,1650]);
-line_fixed = line(xrange, model_fixed.B(1) + xrange.*model_fixed.B(2), 'Color', 'black', 'LineStyle', '--');
-line_marginal = line(xrange, model_int.B(1) + xrange.*model_int.B(2), 'Color', 'black');
-line(xrange, model_int.B(1) + model_int.u(1) + xrange.*model_int.B(2), 'Color', scatter_h1.CData);
-line(xrange, model_int.B(1) + model_int.u(2) + xrange.*model_int.B(2), 'Color', scatter_h2.CData);
-line(xrange, model_int.B(1) + model_int.u(3) + xrange.*model_int.B(2), 'Color', scatter_h3.CData);
-legend([scatter_h3, scatter_h2, scatter_h1, line_marginal, line_fixed], 'Burroughs', 'Gateway', 'Jennings', 'Marginal', 'Fixed Only', 'Location', 'Northwest');
-title({['Random Intercept, B = [' num2str(model_int.B(1), '%0.0f') '; ' num2str(model_int.B(2), '%0.0f') ']']; ['SE = [' num2str(model_int.SE(1), '%0.0f') '; ' num2str(model_int.SE(2), '%0.2f') '], T = [' num2str(model_int.T(1), '%0.2f') ', ' num2str(model_int.T(2), '%0.0f') ']']}, 'interpreter', 'none');
+plot_clusters(model_int.B, [model_int.u; 0; 0; 0]);
+title('Random Interecept, MoM');
 
 % Add to comparison table.
 comparison_tbl = [comparison_tbl; table(model_int.B', model_int.SE', 'VariableNames', {'B', 'SE'}, 'RowNames', {'MoM Intercept'})];
@@ -162,19 +150,8 @@ model_slope.SE = sqrt(diag(model_slope.B_cov));
 model_slope.T = model_slope.B ./ model_slope.SE;
 
 % Scatterplot
-figure; hold on;
-scatter_h1 = scatter(gpa(logical(school(:,1))), sat(logical(school(:,1))));
-scatter_h2 = scatter(gpa(logical(school(:,2))), sat(logical(school(:,2))));
-scatter_h3 = scatter(gpa(logical(school(:,3))), sat(logical(school(:,3))));
-xlabel('Grade Point Average'); ylabel('SAT Score');
-xrange = [0.9, 4.1]; xlim(xrange); ylim([350,1650]);
-line_fixed = line(xrange, model_fixed.B(1) + xrange.*model_fixed.B(2), 'Color', 'black', 'LineStyle', '--');
-line_marginal = line(xrange, model_slope.B(1) + xrange.*model_slope.B(2), 'Color', 'black');
-line(xrange, model_slope.B(1) + xrange.*(model_slope.B(2) + model_slope.u(1)), 'Color', scatter_h1.CData);
-line(xrange, model_slope.B(1) + xrange.*(model_slope.B(2) + model_slope.u(2)), 'Color', scatter_h2.CData);
-line(xrange, model_slope.B(1) + xrange.*(model_slope.B(2) + model_slope.u(3)), 'Color', scatter_h3.CData);
-legend([scatter_h3, scatter_h2, scatter_h1, line_marginal, line_fixed], 'Burroughs', 'Gateway', 'Jennings', 'Marginal', 'Fixed Only', 'Location', 'Northwest');
-title({['Random Slope, B = [' num2str(model_slope.B(1), '%0.0f') '; ' num2str(model_slope.B(2), '%0.0f') ']']; ['SE = [' num2str(model_slope.SE(1), '%0.0f') '; ' num2str(model_slope.SE(2), '%0.0f') '], T = [' num2str(model_slope.T(1), '%0.2f') ', ' num2str(model_slope.T(2), '%0.2f') ']']}, 'interpreter', 'none');
+plot_clusters(model_slope.B, [0; 0; 0; model_slope.u]);
+title('Random Slope, MoM');
 
 % Add to comparison table.
 comparison_tbl = [comparison_tbl; table(model_slope.B', model_slope.SE', 'VariableNames', {'B', 'SE'}, 'RowNames', {'MoM Slope'})];
@@ -209,19 +186,8 @@ model_both.u(1:3) = model_both.u(1:3) - model_both.u(4:6).*mean(gpa);
 model_both.T = model_both.B ./ model_both.SE;
 
 % Scatterplot
-figure; hold on;
-scatter_h1 = scatter(gpa(logical(school(:,1))), sat(logical(school(:,1))));
-scatter_h2 = scatter(gpa(logical(school(:,2))), sat(logical(school(:,2))));
-scatter_h3 = scatter(gpa(logical(school(:,3))), sat(logical(school(:,3))));
-xlabel('Grade Point Average'); ylabel('SAT Score');
-xrange = [0.9, 4.1]; xlim(xrange); ylim([350,1650]);
-line_fixed = line(xrange, model_fixed.B(1) + xrange.*model_fixed.B(2), 'Color', 'black', 'LineStyle', '--');
-line_marginal = line(xrange, model_both.B(1) + xrange.*model_both.B(2), 'Color', 'black');
-line(xrange, model_both.B(1) + model_both.u(1) + xrange.*(model_both.B(2) + model_both.u(4)), 'Color', scatter_h1.CData);
-line(xrange, model_both.B(1) + model_both.u(2) + xrange.*(model_both.B(2) + model_both.u(5)), 'Color', scatter_h2.CData);
-line(xrange, model_both.B(1) + model_both.u(3) + xrange.*(model_both.B(2) + model_both.u(6)), 'Color', scatter_h3.CData);
-legend([scatter_h3, scatter_h2, scatter_h1, line_marginal, line_fixed], 'Burroughs', 'Gateway', 'Jennings', 'Marginal', 'Fixed Only', 'Location', 'Northwest');
-title({['Random Intercept + Slope B = [' num2str(model_both.B(1), '%0.0f') '; ' num2str(model_both.B(2), '%0.0f') ']']; ['SE = [' num2str(model_both.SE(1), '%0.0f') '; ' num2str(model_both.SE(2), '%0.0f') '], T = [' num2str(model_both.T(1), '%0.2f') ', ' num2str(model_both.T(2), '%0.2f') ']']}, 'interpreter', 'none');
+plot_clusters(model_both.B, model_both.u);
+title('Random Interecept + Slope, MoM');
 
 % Add to comparison table.
 comparison_tbl = [comparison_tbl; table(model_both.B', model_both.SE', 'VariableNames', {'B', 'SE'}, 'RowNames', {'MoM Intercept + Slope'})];
@@ -250,19 +216,8 @@ model_reml.u(1:3) = model_reml.u(1:3) - model_reml.u(4:6).*mean(gpa);
 model_reml.T = model_reml.B ./ model_reml.SE;
 
 % Scatterplot
-figure; hold on;
-scatter_h1 = scatter(gpa(logical(school(:,1))), sat(logical(school(:,1))));
-scatter_h2 = scatter(gpa(logical(school(:,2))), sat(logical(school(:,2))));
-scatter_h3 = scatter(gpa(logical(school(:,3))), sat(logical(school(:,3))));
-xlabel('Grade Point Average'); ylabel('SAT Score');
-xrange = [0.9, 4.1]; xlim(xrange); ylim([350,1650]);
-line_fixed = line(xrange, model_fixed.B(1) + xrange.*model_fixed.B(2), 'Color', 'black', 'LineStyle', '--');
-line_marginal = line(xrange, model_reml.B(1) + xrange.*model_reml.B(2), 'Color', 'black');
-line(xrange, model_reml.B(1) + model_reml.u(1) + xrange.*(model_reml.B(2) + model_reml.u(4)), 'Color', scatter_h1.CData);
-line(xrange, model_reml.B(1) + model_reml.u(2) + xrange.*(model_reml.B(2) + model_reml.u(5)), 'Color', scatter_h2.CData);
-line(xrange, model_reml.B(1) + model_reml.u(3) + xrange.*(model_reml.B(2) + model_reml.u(6)), 'Color', scatter_h3.CData);
-legend([scatter_h3, scatter_h2, scatter_h1, line_marginal, line_fixed], 'Burroughs', 'Gateway', 'Jennings', 'Marginal', 'Fixed Only', 'Location', 'Northwest');
-title({['Random Intercept + Slope (REML) B = [' num2str(model_reml.B(1), '%0.0f') '; ' num2str(model_reml.B(2), '%0.0f') ']'], ['SE = [' num2str(model_reml.SE(1), '%0.0f') '; ' num2str(model_reml.SE(2), '%0.0f') '], T = [' num2str(model_reml.T(1), '%0.2f') ', ' num2str(model_reml.T(2), '%0.2f') ']']});
+plot_clusters(model_reml.B, model_reml.u);
+title('Random Intercept + Slope (REML)');
 
 % Add to the comparison table.
 comparison_tbl = [comparison_tbl; table(model_reml.B', model_reml.SE', 'VariableNames', {'B', 'SE'}, 'RowNames', {'REML Intercept + Slope'})];
@@ -296,19 +251,8 @@ model_marginal_both.T = model_marginal_both.B(1:2) ./ model_marginal_both.SE_swe
 comparison_tbl = [comparison_tbl; table(repmat(model_marginal_both.B(1:2)', 2, 1), [model_marginal_both.SE(1:2)'; sqrt(diag(model_marginal_both.swe_covB.block))'], 'VariableNames', {'B', 'SE'}, 'RowNames', {'Marginal Only', 'Marginal + Block SwE'})]
 
 % Scatterplot
-figure; hold on;
-scatter_h1 = scatter(gpa(logical(school(:,1))), sat(logical(school(:,1))));
-scatter_h2 = scatter(gpa(logical(school(:,2))), sat(logical(school(:,2))));
-scatter_h3 = scatter(gpa(logical(school(:,3))), sat(logical(school(:,3))));
-xlabel('Grade Point Average'); ylabel('SAT Score');
-xrange = [0.9, 4.1]; xlim(xrange); ylim([350,1650]);
-line_fixed = line(xrange, model_fixed.B(1) + xrange.*model_fixed.B(2), 'Color', 'black', 'LineStyle', '--');
-line_marginal = line(xrange, model_marginal_both.B(1) + xrange.*model_marginal_both.B(2), 'Color', 'black');
-line(xrange, model_marginal_both.B(1) + model_marginal_both.u(1) + xrange.*(model_marginal_both.B(2) + model_marginal_both.u(4)), 'Color', scatter_h1.CData);
-line(xrange, model_marginal_both.B(1) + model_marginal_both.u(2) + xrange.*(model_marginal_both.B(2) + model_marginal_both.u(5)), 'Color', scatter_h2.CData);
-line(xrange, model_marginal_both.B(1) + model_marginal_both.u(3) + xrange.*(model_marginal_both.B(2) + model_marginal_both.u(6)), 'Color', scatter_h3.CData);
-legend([scatter_h3, scatter_h2, scatter_h1, line_marginal, line_fixed], 'Burroughs', 'Gateway', 'Jennings', 'Marginal', 'Fixed Only', 'Location', 'Northwest');
-title({['Marginal Intercept + Slope = [' num2str(model_marginal_both.B(1), '%0.0f') '; ' num2str(model_marginal_both.B(2), '%0.0f') ']'], ['SE (SwE) = [' num2str(model_marginal_both.SE_swe(1), '%0.0f') '; ' num2str(model_marginal_both.SE_swe(2), '%0.0f') '], T = [' num2str(model_marginal_both.T(1), '%0.2f') ', ' num2str(model_marginal_both.T(2), '%0.2f') ']']});
+plot_clusters(model_marginal_both.B, model_marginal_both.u);
+title('Fixed Effects With Clusters (Marginal)');
 
 %% Visualize comparison table.
 
